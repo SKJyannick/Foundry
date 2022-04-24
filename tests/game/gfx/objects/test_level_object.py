@@ -6,9 +6,10 @@ from pathlib import Path
 import pytest
 from git.repo.base import Repo
 
+from foundry.core.point.Point import Point
 from foundry.game.File import ROM
-from foundry.game.gfx.objects.LevelObject import get_minimal_icon_object
 from foundry.game.gfx.objects.LevelObjectFactory import LevelObjectFactory
+from foundry.gui.ObjectIcon import get_minimal_icon_object
 from foundry.gui.ObjectViewer import ObjectDrawArea
 from foundry.smb3parse.objects import MAX_DOMAIN, MAX_ID_VALUE
 from foundry.smb3parse.objects.object_set import (
@@ -140,7 +141,7 @@ def test_no_change_to_bytes():
 
 
 @pytest.mark.parametrize(
-    "attribute, increase", zip(["domain", "obj_index", "length", "x_position", "y_position"], [1, 0x10, 1, 1, 1])
+    "attribute, increase", zip(["domain", "obj_index", "length", "point"], [1, 0x10, 1, Point(1, 1)])
 )
 def test_change_attribute_to_bytes(attribute, increase):
     object_factory = LevelObjectFactory(1, 1, 0, [], False)

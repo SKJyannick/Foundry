@@ -2,13 +2,11 @@ import pytest
 from PySide6.QtCore import QPoint
 from PySide6.QtGui import Qt, QWheelEvent
 
+from foundry.game.gfx.objects.LevelObject import LevelObject
 from foundry.gui.HeaderEditor import HeaderEditor
 from foundry.gui.LevelView import LevelView
 from foundry.gui.settings import SETTINGS
-from foundry.smb3parse.objects.object_set import (
-    ENEMY_ITEM_OBJECT_SET,
-    PLAINS_OBJECT_SET,
-)
+from foundry.smb3parse.objects.object_set import PLAINS_OBJECT_SET
 
 
 @pytest.fixture
@@ -21,7 +19,7 @@ def level_view(main_window, qtbot):
     [
         ((0, 0), 0x03, 0x00, PLAINS_OBJECT_SET),  # background symbols
         ((361, 283), 0xE2, 0x00, PLAINS_OBJECT_SET),  # background cloud
-        ((233, 409), 0x72, 0x00, ENEMY_ITEM_OBJECT_SET),  # goomba
+        ((233, 409), 0x72, 0x00, None),  # goomba
     ],
 )
 def test_object_at(level_view: LevelView, qtbot, coordinates, obj_index, domain, object_set_number):
@@ -31,8 +29,9 @@ def test_object_at(level_view: LevelView, qtbot, coordinates, obj_index, domain,
 
     assert level_object
     assert level_object.obj_index == obj_index
-    assert level_object.domain == domain
-    assert level_object.object_set.number == object_set_number
+    if isinstance(level_object, LevelObject):
+        assert level_object.domain == domain
+        assert level_object.object_set.number == object_set_number
 
 
 def test_level_larger(level_view):
@@ -71,12 +70,10 @@ def test_level_smaller(level_view):
 
 
 @pytest.mark.parametrize("scroll_amount", [0, 100])
-@pytest.mark.parametrize(
-    "coordinates", [(2, 2), (334, 265), (233, 409)]  # background symbols  # background cloud  # goomba
-)
+@pytest.mark.parametrize("coordinates", [(233, 409)])  # goomba
 @pytest.mark.parametrize("wheel_delta, type_change", [(10, 1), (-10, -1)])  # scroll wheel up  # scroll wheel down
 def test_wheel_event(scroll_amount, coordinates, wheel_delta, type_change, main_window, qtbot):
-    # GIVEN a level view and a cursor position over an object
+    # GIVEN a level view and a cursor point over an object
     x, y = coordinates
 
     level_view = main_window.level_view

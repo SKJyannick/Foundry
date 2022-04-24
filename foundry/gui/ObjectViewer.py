@@ -1,7 +1,7 @@
 from typing import Union
 
 from PySide6.QtCore import QPoint, QSize
-from PySide6.QtGui import QPainter, QPaintEvent
+from PySide6.QtGui import QCloseEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from foundry.core.graphics_set.util import GRAPHIC_SET_NAMES
 from foundry.game.gfx.drawable.Block import Block, get_block
-from foundry.game.gfx.GraphicsSet import GRAPHIC_SET_NAMES
 from foundry.game.gfx.objects.Jump import Jump
 from foundry.game.gfx.objects.LevelObject import LevelObject
 from foundry.game.gfx.objects.LevelObjectFactory import LevelObjectFactory
@@ -47,27 +47,27 @@ class ObjectViewer(CustomChildWindow):
         self.spin_length.setDisabled(True)
         self.spin_length.valueChanged.connect(self.on_spin)
 
-        _toolbar = QToolBar(self)
+        self.toolbar_ = QToolBar(self)
 
-        _toolbar.addWidget(self.spin_domain)
-        _toolbar.addWidget(self.spin_type)
-        _toolbar.addWidget(self.spin_length)
+        self.toolbar_.addWidget(self.spin_domain)
+        self.toolbar_.addWidget(self.spin_type)
+        self.toolbar_.addWidget(self.spin_length)
 
-        self.object_set_dropdown = QComboBox(_toolbar)
+        self.object_set_dropdown = QComboBox(self.toolbar_)
         self.object_set_dropdown.addItems(OBJECT_SET_ITEMS[1:])
         self.object_set_dropdown.setCurrentIndex(0)
 
-        self.graphic_set_dropdown = QComboBox(_toolbar)
+        self.graphic_set_dropdown = QComboBox(self.toolbar_)
         self.graphic_set_dropdown.addItems(GRAPHIC_SET_NAMES)
         self.graphic_set_dropdown.setCurrentIndex(1)
 
         self.object_set_dropdown.currentIndexChanged.connect(self.on_object_set)
         self.graphic_set_dropdown.currentIndexChanged.connect(self.on_graphic_set)
 
-        _toolbar.addWidget(self.object_set_dropdown)
-        _toolbar.addWidget(self.graphic_set_dropdown)
+        self.toolbar_.addWidget(self.object_set_dropdown)
+        self.toolbar_.addWidget(self.graphic_set_dropdown)
 
-        self.addToolBar(_toolbar)
+        self.addToolBar(self.toolbar_)
 
         self.drawing_area = ObjectDrawArea(self, 1)
 
@@ -90,6 +90,10 @@ class ObjectViewer(CustomChildWindow):
         self.layout().setSizeConstraint(QLayout.SetFixedSize)
 
         return
+
+    def closeEvent(self, event: QCloseEvent):
+        self.toolbar_.close()
+        super().closeEvent(event)
 
     def set_object_and_graphic_set(self, object_set: int, graphics_set: int):
         self.object_set_dropdown.setCurrentIndex(object_set - 1)
@@ -172,7 +176,10 @@ class ObjectDrawArea(QWidget):
             return
 
         self.setMinimumSize(
-            QSize(self.current_object.rendered_width * Block.WIDTH, self.current_object.rendered_height * Block.HEIGHT)
+            QSize(
+                self.current_object.rendered_size.width * Block.WIDTH,
+                self.current_object.rendered_size.height * Block.HEIGHT,
+            )
         )
 
     def update_object(self, object_data: Union[bytearray, LevelObject, Jump] = None):
@@ -194,7 +201,8 @@ class ObjectDrawArea(QWidget):
 
         painter.translate(
             QPoint(
-                -Block.WIDTH * self.current_object.rendered_base_x, -Block.HEIGHT * self.current_object.rendered_base_y
+                -Block.WIDTH * self.current_object.rendered_position.x,
+                -Block.HEIGHT * self.current_object.rendered_position.y,
             )
         )
 
@@ -223,9 +231,9 @@ class BlockArray(QWidget):
         for block_index in self.level_object.blocks:
             block = get_block(
                 block_index,
-                self.level_object.palette_group,
+                tuple(tuple(c for c in pal) for pal in self.level_object.palette_group),
                 self.level_object.graphics_set,
-                self.level_object.tsa_data,
+                bytes(self.level_object.tsa_data),
             )
             self.layout().addWidget(BlockArea(block))
 

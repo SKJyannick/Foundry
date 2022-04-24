@@ -102,7 +102,7 @@ class WorldMap(LevelBase):
     They can be multiple screens big, which are either not visibly connected or connected horizontally.
 
     Attributes:
-        layout_address  The position in the ROM of the bytes making up the visual layout of the world map.
+        layout_address  The point in the ROM of the bytes making up the visual layout of the world map.
         layout_bytes    The actual bytes making up the visual layout
 
         width           The width of the world map in blocks across all scenes.
@@ -178,7 +178,7 @@ class WorldMap(LevelBase):
 
     def level_for_position(self, screen: int, player_row: int, player_column: int):
         """
-        The rom takes the position of the current player, so the world, the screen and the x and y coordinates, and
+        The rom takes the point of the current player, so the world, the screen and the x and y coordinates, and
         operates on them. First it is checked, whether or not the player is located on a tile, that is able to be
         entered.
 
@@ -186,18 +186,26 @@ class WorldMap(LevelBase):
         object set is necessary to find the right base offset for the level address and to correctly parse its object
         data.
 
-        Using the tile information it should be possible to correctly name almost all levels, for example Level *-1 will
+        Using the tile information it should be possible to correctly name almost all levels, for example Level 1 will
         be located in the list at the offset pointed to by the "Level 1" tile in that world.
 
         That means, that all levels should be able to be collected, by iterating over all possible tiles and following
         the same procedure as the rom.
 
-        :param screen:
-        :param player_row:
-        :param player_column:
+        Parameters
+        ----------
+        screen : int
+            The screen index of the level to acquire.
+        player_row : int
+            The row of the player.
+        player_column : int
+            The column of the player.
 
-        :return: A tuple of the object set number, the absolute level address, pointing to the objects and the enemy
-        address. Or None, if there is no level at the map position.
+        Returns
+        -------
+        Any
+            A tuple of the object set number, the absolute level address, pointing to the objects and the enemy
+        address. Or None, if there is no level at the map point.
         """
         assert isinstance(screen, int)
         assert isinstance(player_row, int)
@@ -241,7 +249,7 @@ class WorldMap(LevelBase):
         existing_level = self.level_for_position(position.screen, position.row, position.column)
 
         if existing_level is None:
-            raise LookupError("No existing level at position.")
+            raise LookupError("No existing level at point.")
 
         _, screen, row, column = position.tuple()
 
@@ -271,7 +279,7 @@ class WorldMap(LevelBase):
         :param int player_row: In which row the level is positioned.
         :param int player_column: In which column the level is positioned.
 
-        :return: The memory addresses of the row, column and level offset position.
+        :return: The memory addresses of the row, column and level offset point.
         """
 
         level_y_pos_list_start = WORLD_MAP_BASE_OFFSET + self._rom.little_endian(
@@ -288,7 +296,7 @@ class WorldMap(LevelBase):
             [self.level_count_s1, self.level_count_s2, self.level_count_s3, self.level_count_s4][0 : screen - 1]
         )
 
-        # find the row position
+        # find the row point
         for row_index in range(row_start_index, row_amount):
             value = self._rom.int(level_y_pos_list_start + row_index)
 

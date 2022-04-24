@@ -1,7 +1,7 @@
 from typing import Optional
 
 from PySide6.QtCore import Signal
-from PySide6.QtGui import Qt, QWindow
+from PySide6.QtGui import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from foundry.game.gfx.GraphicsSet import GRAPHIC_SET_NAMES
+from foundry.core.graphics_set.util import GRAPHIC_SET_NAMES
 from foundry.game.level.Level import Level
 from foundry.game.level.LevelRef import LevelRef
 from foundry.gui.CustomDialog import CustomDialog
@@ -23,7 +23,7 @@ from foundry.gui.LevelSelector import OBJECT_SET_ITEMS, LevelSelector
 from foundry.gui.Spinner import Spinner
 from foundry.smb3parse.levels.level_header import MARIO_X_POSITIONS, MARIO_Y_POSITIONS
 
-LEVEL_LENGTHS = [0x10 * (i + 1) for i in range(0, 2 ** 4)]
+LEVEL_LENGTHS = [0x10 * (i + 1) for i in range(0, 2**4)]
 STR_LEVEL_LENGTHS = [f"{length - 1:0=#4X} / {length} Blocks".replace("X", "x") for length in LEVEL_LENGTHS]
 
 STR_X_POSITIONS = [f"{position >> 4}. Block ({position:0=#4X})".replace("X", "x") for position in MARIO_X_POSITIONS]
@@ -76,7 +76,7 @@ SPINNER_MAX_VALUE = 0x0F_FF_FF
 class HeaderEditor(CustomDialog):
     header_change: Signal = Signal()
 
-    def __init__(self, parent: Optional[QWindow], level_ref: LevelRef):
+    def __init__(self, parent: Optional[QWidget], level_ref: LevelRef):
         super(HeaderEditor, self).__init__(parent, "Level Header Editor")
 
         self.level: Level = level_ref.level
@@ -182,8 +182,8 @@ class HeaderEditor(CustomDialog):
         form = QFormLayout()
         form.setFormAlignment(Qt.AlignCenter)
 
-        form.addRow("Object Palette: ", self.object_palette_spinner)
-        form.addRow("Enemy Palette: ", self.enemy_palette_spinner)
+        form.addRow("Object palette: ", self.object_palette_spinner)
+        form.addRow("Enemy palette: ", self.enemy_palette_spinner)
         form.addRow("Graphic Set: ", self.graphic_set_dropdown)
 
         widget = QWidget()
@@ -218,7 +218,7 @@ class HeaderEditor(CustomDialog):
         widget = QWidget()
         widget.setLayout(form)
 
-        self.tab_widget.addTab(widget, "Jump Destination")
+        self.tab_widget.addTab(widget, "Warping")
 
         self.header_bytes_label = QLabel()
 

@@ -5,26 +5,28 @@ from PySide6.QtCore import QPoint, QRect
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, Qt
 
 from foundry import data_dir
+from foundry.core.graphics_set.GraphicsSet import GraphicsSet
+from foundry.core.palette import NESPalette
+from foundry.core.palette.PaletteGroup import MutablePaletteGroup
 from foundry.game.File import ROM
 from foundry.game.gfx.drawable import apply_selection_overlay
 from foundry.game.gfx.drawable.Block import Block
-from foundry.game.gfx.GraphicsSet import GraphicsSet
 from foundry.game.gfx.objects.EnemyItem import MASK_COLOR, EnemyObject
-from foundry.game.gfx.objects.LevelObject import GROUND, SCREEN_HEIGHT, SCREEN_WIDTH
+from foundry.game.gfx.objects.LevelObject import (
+    GROUND,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    LevelObject,
+)
 from foundry.game.gfx.objects.ObjectLike import (
     EXPANDS_BOTH,
     EXPANDS_HORIZ,
     EXPANDS_VERT,
 )
-from foundry.game.gfx.Palette import (
-    NESPalette,
-    bg_color_for_object_set,
-    load_palette_group,
-)
 from foundry.game.level.Level import Level
 from foundry.gui.AutoScrollDrawer import AutoScrollDrawer
 from foundry.gui.settings import SETTINGS
-from foundry.smb3parse.constants import OBJ_AUTOSCROLL
+from foundry.smb3parse.constants import OBJ_AUTOSCROLL, TILESET_BACKGROUND_BLOCKS
 from foundry.smb3parse.levels import LEVEL_MAX_LENGTH
 from foundry.smb3parse.objects.object_set import (
     CLOUDY_OBJECT_SET,
@@ -88,6 +90,15 @@ SPECIAL_BACKGROUND_OBJECTS = [
 ]
 
 
+def get_blocks(level: Level) -> list[Block]:
+    palette_group = MutablePaletteGroup.from_tileset(level.object_set_number, level.header.object_palette_index)
+    palette_group = tuple(tuple(c for c in pal) for pal in palette_group)
+    graphics_set = GraphicsSet.from_tileset(level.header.graphic_set_index)
+    tsa_data = ROM().get_tsa_data(level.object_set_number)
+
+    return [Block(i, palette_group, graphics_set, tsa_data) for i in range(0x100)]
+
+
 def _block_from_index(block_index: int, level: Level) -> Block:
     """
     Returns the block at the given index, from the TSA table for the given level.
@@ -97,11 +108,11 @@ def _block_from_index(block_index: int, level: Level) -> Block:
     :return:
     """
 
-    palette_group = load_palette_group(level.object_set_number, level.header.object_palette_index)
-    graphics_set = GraphicsSet(level.header.graphic_set_index)
+    palette_group = MutablePaletteGroup.from_tileset(level.object_set_number, level.header.object_palette_index)
+    graphics_set = GraphicsSet.from_tileset(level.header.graphic_set_index)
     tsa_data = ROM().get_tsa_data(level.object_set_number)
 
-    return Block(block_index, palette_group, graphics_set, tsa_data)
+    return Block(block_index, tuple(tuple(c for c in pal) for pal in palette_group), graphics_set, tsa_data)
 
 
 class LevelDrawer:
@@ -126,15 +137,14 @@ class LevelDrawer:
     def draw(self, painter: QPainter, level: Level):
         self._draw_background(painter, level)
 
+        self._draw_default_graphics(painter, level)
+
         if level.object_set_number == DESERT_OBJECT_SET:
             self._draw_desert_default_graphics(painter, level)
         elif level.object_set_number == DUNGEON_OBJECT_SET:
             self._draw_dungeon_default_graphics(painter, level)
         elif level.object_set_number == ICE_OBJECT_SET:
             self._draw_ice_default_graphics(painter, level)
-
-        # painter.setPen(QPen(QColor(0x00, 0x00, 0x00, 0x80), width=1))
-        # painter.setBrush(Qt.NoBrush)
 
         self._draw_objects(painter, level)
 
@@ -159,9 +169,13 @@ class LevelDrawer:
         painter.save()
 
         if level.object_set_number == CLOUDY_OBJECT_SET:
-            bg_color = NESPalette[load_palette_group(level.object_set_number, level.header.object_palette_index)[3][2]]
+            bg_color = NESPalette[
+                MutablePaletteGroup.from_tileset(level.object_set_number, level.header.object_palette_index)[3][2]
+            ]
         else:
-            bg_color = bg_color_for_object_set(level.object_set_number, level.header.object_palette_index)
+            bg_color = MutablePaletteGroup.from_tileset(
+                level.object_set_number, level.header.object_palette_index
+            ).background_color
 
         painter.fillRect(level.get_rect(self.block_length), bg_color)
 
@@ -208,23 +222,48 @@ class LevelDrawer:
         for x, y in product(range(level.width), range(level.height)):
             bg_block.draw(painter, x * self.block_length, y * self.block_length, self.block_length)
 
+    def _draw_default_graphics(self, painter: QPainter, level: Level):
+        bg_block = _block_from_index(TILESET_BACKGROUND_BLOCKS[level.object_set_number], level)
+
+        for x, y in product(range(level.width), range(level.height)):
+            bg_block.draw(painter, x * self.block_length, y * self.block_length, self.block_length)
+
     def _draw_objects(self, painter: QPainter, level: Level):
+        bg_palette_group = tuple(
+            tuple(c for c in pal)
+            for pal in MutablePaletteGroup.from_tileset(level.object_set_number, level.header.object_palette_index)
+        )
+        spr_palette_group = tuple(
+            tuple(c for c in pal)
+            for pal in MutablePaletteGroup.from_tileset(level.object_set_number, 8 + level.header.enemy_palette_index)
+        )
+
+        blocks = get_blocks(level)
+        for level_object in level.objects:
+            level_object.palette_group = bg_palette_group
+        for enemy in level.enemies:
+            enemy.palette_group = spr_palette_group
+
         for level_object in level.get_all_objects():
+
             level_object.render()
 
-            if level_object.name.lower() in SPECIAL_BACKGROUND_OBJECTS:
+            if level_object.name.lower() in SPECIAL_BACKGROUND_OBJECTS and isinstance(level_object, LevelObject):
                 width = LEVEL_MAX_LENGTH
-                height = GROUND - level_object.y_position
+                height = GROUND - level_object.position.y
 
                 blocks_to_draw = [level_object.blocks[0]] * width * height
 
                 for index, block_index in enumerate(blocks_to_draw):
-                    x = level_object.x_position + index % width
-                    y = level_object.y_position + index // width
+                    x = level_object.position.x + index % width
+                    y = level_object.position.y + index // width
 
-                    level_object._draw_block(painter, block_index, x, y, self.block_length, False)
+                    level_object._draw_block(painter, block_index, x, y, self.block_length, False, blocks=blocks)
             else:
-                level_object.draw(painter, self.block_length, self.transparency)
+                if isinstance(level_object, LevelObject):
+                    level_object.draw(painter, self.block_length, self.transparency, blocks=blocks)
+                else:
+                    level_object.draw(painter, self.block_length, self.transparency)
 
             if level_object.selected:
                 painter.save()
@@ -263,7 +302,7 @@ class LevelDrawer:
                 # center() is one pixel off for some reason
                 pos = rect.topLeft() + QPoint(*(rect.size() / 2).toTuple())
 
-                trigger_position = level_object.get_position()
+                trigger_position = (level_object.position.x, level_object.position.y)
 
                 if "left" in name:
                     image = LEFT_ARROW
@@ -310,7 +349,7 @@ class LevelDrawer:
 
                 pos.setY(rect.top() - self.block_length)
 
-                x, y = level_object.get_position()
+                x, y = level_object.position.x, level_object.position.y
 
                 # jumps seemingly trigger on the bottom block
                 if not self._object_in_jump_area(level, (x, y + 1)):
@@ -369,7 +408,7 @@ class LevelDrawer:
                 continue
 
             if fill_object:
-                for x in range(level_object.rendered_width):
+                for x in range(level_object.rendered_size.width):
                     adapted_pos = QPoint(pos)
                     adapted_pos.setX(pos.x() + x * self.block_length)
 
@@ -465,6 +504,6 @@ class LevelDrawer:
         else:
             return
 
-        drawer = AutoScrollDrawer(item.y_position, level)
+        drawer = AutoScrollDrawer(item.position.y, level)
 
         drawer.draw(painter, self.block_length)

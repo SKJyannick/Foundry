@@ -4,7 +4,6 @@ import urllib.request
 from pathlib import Path
 from typing import Union
 
-from pkg_resources import get_distribution
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices, QIcon
 
@@ -26,6 +25,9 @@ data_dir = root_dir / "data"
 main_window_flags_path = data_dir / "main_window_flags.json"
 jump_creator_flags_path = data_dir / "jump_creator_flags.json"
 spinner_panel_flags_path = data_dir / "spinner_panel_flags.json"
+enemy_definitions = data_dir / "enemy_definitions.json"
+warp_definitions = data_dir / "warp_definitions.json"
+tileset_definitions = data_dir / "definitions.json"
 tileset_data_path = data_dir / "tilesets.json"
 doc_dir = root_dir.joinpath("doc")
 icon_dir = data_dir.joinpath("icons")
@@ -44,15 +46,14 @@ def open_url(url: Union[str, QUrl]):
 
 
 def get_current_version_name() -> str:
-    try:
-        return "0.1.0"  # get_distribution("foundry").version
-    except LookupError:
-        return "beta"
+    from single_source import get_version
+
+    return get_version("foundry_smb3", root_dir, fail=True)  # type: ignore
 
 
 def get_latest_version_name(timeout: int = 10) -> str:
-    owner = "mchlnix"
-    repo = "SMB3-Foundry"
+    owner = "TheJoeSmo"
+    repo = "Foundry"
 
     api_call = f"https://api.github.com/repos/{owner}/{repo}/releases"
 

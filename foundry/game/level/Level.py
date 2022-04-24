@@ -1,3 +1,4 @@
+from functools import reduce
 from typing import List, Optional, Tuple, Union, overload
 
 from PySide6.QtCore import QObject, QPoint, QRect, QSize, Signal, SignalInstance
@@ -12,7 +13,6 @@ from foundry.game.level import LevelByteData
 from foundry.game.level.LevelLike import LevelLike
 from foundry.game.level.util import get_worlds, load_level_offsets
 from foundry.game.ObjectSet import ObjectSet
-from foundry.gui.UndoStack import UndoStack
 from foundry.smb3parse.constants import (
     BASE_OFFSET,
     TILESET_LEVEL_OFFSET,
@@ -30,12 +30,15 @@ LEVEL_DEFAULT_HEIGHT = 27
 LEVEL_DEFAULT_WIDTH = 16
 
 
-def world_and_level_for_level_address(level_address: int):
+def get_level_name_suggestion(level_address: int) -> str:
     for level in Level.offsets:
         if level.generator_pointer == level_address:
-            return level.display_information.locations[0].world, level.display_information.locations[0].index
+            name = level.display_information.name
+            if name is not None:
+                return name
+            return "Unspecified"
     else:
-        return -1, -1
+        return "Unknown"
 
 
 class LevelSignaller(QObject):
@@ -64,8 +67,6 @@ class Level(LevelLike):
         """Whether the current level was modified since it was loaded/last saved."""
 
         self.object_set = ObjectSet(object_set_number)
-
-        self.undo_stack = UndoStack()
 
         self.name = level_name
 
@@ -98,8 +99,6 @@ class Level(LevelLike):
 
         if new_level:
             self._update_level_size()
-
-            self.undo_stack.clear(self.to_bytes())
             self.data_changed.emit()
 
     @property
@@ -150,20 +149,12 @@ class Level(LevelLike):
         self.data_changed.emit()
 
     def current_object_size(self):
-        size = 0
-
-        for obj in self.objects:
-            if obj.is_4byte:
-                size += 4
-            else:
-                size += 3
-
-        size += Jump.SIZE * len(self.jumps)
-
-        return size
+        return reduce(
+            lambda count, element: count + len(element), [obj.to_bytes() for obj in self.objects + self.jumps], 0
+        )
 
     def current_enemies_size(self):
-        return len(self.enemies) * ENEMY_SIZE
+        return reduce(lambda count, element: count + len(element), [obj.to_bytes() for obj in self.enemies], 0)
 
     def _parse_header(self):
         self.header = LevelHeader(self.header_bytes, self.object_set_number)
@@ -702,7 +693,7 @@ class Level(LevelLike):
         m3l_bytes.append(0xFF)
         m3l_bytes.append(0x01)
 
-        for enemy in sorted(self.enemies, key=lambda _enemy: _enemy.x_position):
+        for enemy in sorted(self.enemies, key=lambda _enemy: _enemy.position.x):
             m3l_bytes.extend(enemy.to_bytes())
 
         m3l_bytes.append(0xFF)
@@ -759,9 +750,9 @@ class Level(LevelLike):
         enemies = bytearray()
 
         if self.is_vertical:
-            enemies_objects = sorted(self.enemies, key=lambda _enemy: _enemy.y_position)
+            enemies_objects = sorted(self.enemies, key=lambda _enemy: _enemy.position.y)
         else:
-            enemies_objects = sorted(self.enemies, key=lambda _enemy: _enemy.x_position)
+            enemies_objects = sorted(self.enemies, key=lambda _enemy: _enemy.position.x)
 
         for enemy in enemies_objects:
             enemies.extend(enemy.to_bytes())

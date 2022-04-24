@@ -1,24 +1,31 @@
-from PySide6.QtGui import QMouseEvent, Qt, QWindow
-from PySide6.QtWidgets import QListWidget, QSizePolicy
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QMouseEvent, Qt
+from PySide6.QtWidgets import QListWidget, QScrollBar, QSizePolicy, QWidget
 
 from foundry.game.level.LevelRef import LevelRef
 from foundry.gui.ContextMenu import ContextMenu
 
 
 class ObjectList(QListWidget):
-    def __init__(self, parent: QWindow, level_ref: LevelRef, context_menu: ContextMenu):
+    def __init__(self, parent: QWidget, level_ref: LevelRef, context_menu: ContextMenu):
         super(ObjectList, self).__init__(parent=parent)
 
-        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
+        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         self.setSizeAdjustPolicy(QListWidget.AdjustToContents)
+        self.setSelectionMode(QListWidget.ExtendedSelection)
+        scroll_bar = QScrollBar(self)
+        self.setVerticalScrollBar(scroll_bar)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setWordWrap(True)
 
         self.setSelectionMode(self.ExtendedSelection)
 
         self.level_ref: LevelRef = level_ref
         self.level_ref.data_changed.connect(self.update_content)
-
         self.context_menu = context_menu
 
+        self.labels = []
+        self._on_selection_changed_ongoing = False
         self.itemSelectionChanged.connect(self.on_selection_changed)
 
         self.setWhatsThis(
@@ -31,6 +38,9 @@ class ObjectList(QListWidget):
             "Note: While Jumps are technically level objects, they are omitted here, since they are "
             "listed in a separate list below."
         )
+
+    def sizeHint(self):
+        return QSize(100, 200)
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.RightButton:
@@ -70,36 +80,53 @@ class ObjectList(QListWidget):
         self.context_menu.as_list_menu().popup(event.globalPos())
 
     def update_content(self):
-        level_objects = self.level_ref.get_all_objects()
+        """
+        A new item has been selected, so select the new item.
+        """
+        prior_selection = self.currentIndex()
+        currently_selected = set(obj.row() for obj in self.selectedIndexes())
+        ignore_prior_selection = False
+
+        level_objects = self.level_ref.level.get_all_objects()
 
         labels = [obj.name for obj in level_objects]
+        if labels != self.labels:
+            self.labels = labels
 
-        self.blockSignals(True)
+            self.blockSignals(True)
+            self.clear()
+            self.addItems(labels)
 
-        self.clear()
+            for index, level_object in enumerate(level_objects):
+                item = self.item(index)
+                item.setData(Qt.UserRole, level_object)
+                item.setSelected(level_object.selected)
+                if level_object.selected and index not in currently_selected:
+                    ignore_prior_selection = True
 
-        self.addItems(labels)
+            self.blockSignals(False)
 
+        has_changes = False
         for index, level_object in enumerate(level_objects):
-            item = self.item(index)
-
-            item.setData(Qt.UserRole, level_object)
-            item.setSelected(level_object.selected)
-
-        self.blockSignals(False)
+            if level_object.selected and index not in currently_selected:
+                has_changes = True
+                break
+        if not has_changes:
+            return
 
         if self.selectedIndexes():
             self.scrollTo(self.selectedIndexes()[-1])
+
+        if not ignore_prior_selection:
+            self.setCurrentIndex(prior_selection)
 
     def selected_objects(self):
         return [self.item(index.row()).data(Qt.UserRole) for index in self.selectedIndexes()]
 
     def on_selection_changed(self):
-        selected_objects = self.selected_objects()
-
-        selection_not_changed = selected_objects == self.level_ref.selected_objects
-
-        if selection_not_changed:
+        if self._on_selection_changed_ongoing:
             return
-        else:
-            self.level_ref.selected_objects = selected_objects
+
+        self._on_selection_changed_ongoing = True
+        self.level_ref.selected_objects = self.selected_objects()
+        self._on_selection_changed_ongoing = False
